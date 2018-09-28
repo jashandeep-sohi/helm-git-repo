@@ -1,0 +1,15 @@
+name: "git-repo"
+version: "0.1.0"
+usage: "Use Git as a chart repositiory"
+description: "helm git-repo help"
+ignoreFlags: false
+useTunnel: false
+command: "$HELM_PLUGIN_DIR/git-repo.sh"
+downloaders:
+  - command: "git-repo-fetch.sh"
+    protocols:
+      - "git+ssh"
+      - "git+https"
+      - "git+file"
+hooks:
+  install: "$HELM_PLUGIN_DIR/install.sh"
