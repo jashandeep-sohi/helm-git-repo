@@ -28,31 +28,56 @@ def cli(log_level):
     logger.setLevel(log_level.upper())
 
     if getenv("HELM_DEBUG") == "1":
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel("DEBUG")
 
 
 @cli.command(
-    "add",
-    short_help="add a chart repository"
+    "add"
 )
-@click.argument(
-    "NAME"
+@click.argument("NAME")
+@click.argument("GIT_URL")
+@click.option(
+    "--branch",
+    default="master",
+    show_default=True,
 )
-@click.argument(
-    "URL"
+@click.option(
+    "--index-path",
+    default="index.yaml",
+    show_default=True,
 )
-def add(name, url):
-    
+def add(name, git_url, branch, index_path):
+    """
+    Add a chart repository.
+    """
+    url = "git-repo+index:{!s}?branch={!s}&index_path={!s}&name={!s}".format(
+        git_url,
+        branch,
+        index_path,
+        name
+    )
+    sh("helm repo add {!s} '{!s}'".format(name, url), show=True)
 
 
 @cli.command(
-    "index",
-    short_help="Generate an index file from chart directories",
+    "clear-cache"
+)
+@click.argument("NAME")
+def clear_cache(name):
+    """
+    Clear Git cache for a chart repository.
+    """
+    git_store_path = pathlib.Path(getenv("HELM_PLUGIN_DIR")) / "git" / name
+
+    sh("rm -rf {!s}/*".format(git_store_path), show=True)
+
+
+@cli.command(
+    "index"
 )
 @click.argument(
     "CHART_DIRS",
     nargs=-1,
-    type=click.Path(dir_okay=True, file_okay=False, exists=True),
 )
 @click.option(
     "--out",
@@ -63,17 +88,30 @@ def add(name, url):
 )
 @click.option(
     "--merge",
-    help="Merge the generated index into the given index",
+    help="Merge the generated index from the given index",
     type=click.Path(dir_okay=False, file_okay=True, exists=True),
+    default=None
 )
-def index(chart_dirs, out, merge=None):
+@click.option("--skip-prompt/--no-skip-prompt", default=False)
+def index(chart_dirs, out, merge, skip_prompt):
     """
-    Generate an index file given a list of chart directories.
+    Generate an index file from chart directories.
     """
     if not chart_dirs:
         exit(0)
 
-    _, commit, _ = sh("git rev-parse --verify HEAD")
+    if not skip_prompt:
+        _, git_log, _ = sh("git log -1")
+
+        click.secho(git_log, fg="yellow", err=True)
+        click.confirm(
+            "Proceed with files from this commit?",
+            default=True,
+            abort=True,
+            err=True
+        )
+
+    _, commit_ref, _ = sh("git log -1 --format='%H'")
     _, git_root, _ = sh("git rev-parse --show-toplevel")
 
     sh("helm repo update", show=True)
@@ -84,13 +122,13 @@ def index(chart_dirs, out, merge=None):
         if merge is None:
             merge = tmp_dir / "merge.yaml"
 
-        for chart_dir in sorted(chart_dirs):
-            chart_dir = pathlib.Path(chart_dir)
+        for chart_dir in chart_dirs:
+            chart_dir = pathlib.Path(chart_dir).resolve().relative_to(git_root)
 
             sh(
                 "git --work-tree='{!s}' checkout '{!s}' -- '{!s}'".format(
                     tmp_dir,
-                    commit,
+                    commit_ref,
                     chart_dir
                 )
             )
@@ -110,7 +148,10 @@ def index(chart_dirs, out, merge=None):
                 )
             )
 
-            url = "?ref={!s}&path={!s}".format(commit, chart_dir)
+            url = "git-repo+chart://{!s}/{!s}".format(
+                commit_ref,
+                chart_dir
+            )
 
             sh(
                 "helm repo index --url '{!s}' --merge '{!s}' '{!s}'".format(
@@ -128,59 +169,128 @@ def index(chart_dirs, out, merge=None):
         exit(0, "Sucessfully wrote index to '{!s}'".format(out.name))
 
 
-@cli.command("fetch")
+@cli.command("fetch", hidden=True)
 @click.argument("cert_file")
 @click.argument("key_file")
 @click.argument("ca_file")
 @click.argument("url")
 def fetch(cert_file, key_file, ca_file, url):
-    "Output the chart tarball or repo index to STDOUT."""
+    """
+    Output a chart tarball or repo index to STDOUT.
+    """
+
     logger.debug("input url %s", url)
 
-    url = urllib.parse.urlparse(url)
-    logger.debug(url)
-
-    path = pathlib.PurePath(url.path)
-
-    if path.name == "index.yaml":
+    if url.startswith("git-repo+index"):
         print_index(url)
-    elif path.suffix == ".tgz":
+    elif url.startswith("git-repo+chart"):
         print_chart_tarball(url)
     else:
-        exit(1, "Unable to handle: %s", path)
+        exit(1, "Unable to handle {!s}".format(url))
 
 
 def print_index(url):
-    git_url = url._replace(
-        scheme=url.scheme.lstrip("git+"),
-        path="",
-        query="",
-        fragment="",
-    ).geturl()
+    parsed_url = urllib.parse.urlparse(url)
+    logger.debug("parsed url %r", parsed_url)
 
-    query = urllib.parse.parse_qs(url.query, strict_parsing=True)
+    git_url = parsed_url.path
 
-    ref = query.get("ref", "master")
+    query_params = urllib.parse.parse_qs(parsed_url.query)
+    logger.debug("parsed query params %r", query_params)
+
+    repo_name = query_params.get("name", [None])[0]
+    git_branch = query_params.get("branch", ["master"])[0]
+    git_index_path = query_params.get("index_path", ["index.yaml"])[0]
 
     plugin_home = pathlib.Path(getenv("HELM_PLUGIN_DIR"))
 
-    repo_name = sha(git_url)
+    if not repo_name:
+        exit(1, "invalid url; must set 'name=' query paramater")
 
-    git_dir = plugin_home / "store.git"
+    git_dir = plugin_home / "git" / repo_name
 
-    git(git_dir, "init --bare '{!s}'".format(git_dir))
+    if not git_dir.exists():
+        git(git_dir, "init --bare '{!s}'".format(git_dir))
+        git(git_dir, "remote add origin '{!s}'".format(git_url))
 
-    git(git_dir, "remote add")
+    git(
+        git_dir,
+        "fetch origin '{!s}:{!s}'".format(git_branch, git_branch),
+    )
 
-    git(git_dir, "fetch '{!s}' '{!s}'".format(repo_name, ref))
+    _, out, _ = git(
+        git_dir,
+        "show '{!s}':'{!s}'".format(
+            git_branch,
+            git_index_path
+        )
+    )
+
+    out = out.replace(
+        "git-repo+chart://",
+        "git-repo+chart://{!s}/".format(repo_name)
+    )
+
+    click.echo(out)
 
 
 def print_chart_tarball(url):
-    pass
+    parsed_url = urllib.parse.urlparse(url)
+    logger.debug("parsed url %r", parsed_url)
 
+    repo_name = parsed_url.netloc
+    path = pathlib.Path(parsed_url.path)
 
-def sha(utf8_data):
-    return hashlib.sha256(utf8_data.encode("utf-8")).hexdigest()
+    commit_ref = path.parts[1]
+    git_path = "/".join(path.parts[2:-1])
+
+    logger.debug("repo_name: %s", repo_name)
+    logger.debug("commit_ref: %s", commit_ref)
+    logger.debug("git_path: %s", git_path)
+
+    plugin_home = pathlib.Path(getenv("HELM_PLUGIN_DIR"))
+    git_dir = plugin_home / "git" / repo_name
+
+    git(
+        git_dir,
+        "fetch origin '{!s}'".format(commit_ref),
+    )
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_dir = pathlib.Path(tmp_dir)
+
+        git(
+            git_dir,
+            "--work-tree='{!s}' checkout 'refs/heads/{!s}' -- '{!s}'".format(
+                tmp_dir,
+                commit_ref,
+                git_path
+            )
+        )
+
+        tmp_chart_dir = tmp_dir / git_path
+
+        sh(
+            "helm dependency update --skip-refresh '{!s}'".format(
+                tmp_chart_dir
+            )
+        )
+
+        sh(
+            "helm package --destination '{!s}' '{!s}'".format(
+                tmp_chart_dir,
+                tmp_chart_dir,
+            )
+        )
+
+        chart_tgz_loc = tmp_chart_dir / path.name
+
+        chart_tgz_fobj = click.open_file(chart_tgz_loc, "rb")
+        stdout_fobj = click.open_file("-", "wb")
+
+        with chart_tgz_fobj as chart_tgz_fobj, stdout_fobj as stdout_fobj:
+            stdout_fobj.writelines(chart_tgz_fobj)
+
 
 
 def git(git_dir, cmd, *args, **kwargs):
@@ -231,7 +341,7 @@ def sh(*args, show=False, hide_cmd=False, hide_out=False, hide_err=False,
     if err:
         err = err.decode("utf-8").strip()
 
-    if exit_on_error and ret !=0:
+    if exit_on_error and ret != 0:
         logger.error(err)
         raise SystemExit(ret)
     elif err:
@@ -258,7 +368,7 @@ class ClickLoggingFormatter(logging.Formatter):
         fmt_by_level = {
             "error": dict(fg="red"),
             "exception": dict(fg="red"),
-            "warning": dict(fg="orange"),
+            "warning": dict(fg="yellow"),
         }
 
         fmt = fmt_by_level.get(record.levelname.lower(), {})

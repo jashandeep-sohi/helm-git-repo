@@ -8,8 +8,8 @@ command: "$HELM_PLUGIN_DIR/git-repo.sh"
 downloaders:
   - command: "git-repo-fetch.sh"
     protocols:
-      - "git+ssh"
-      - "git+https"
-      - "git+file"
+      - "git-repo+index"
+      - "git-repo+chart"
 hooks:
   install: "$HELM_PLUGIN_DIR/install.sh"
+  update: "$HELM_PLUGIN_DIR/install.sh"
