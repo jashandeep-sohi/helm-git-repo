@@ -24,7 +24,7 @@ Test if everything installed correctly::
 Usage
 -----
 Assuming you have some charts commited to a Git repository, you'll first want
-to generate an index file. Let's use a fork of the offical helm charts::
+to generate an index file. Let's use a fork of the official helm charts::
 
   $ git clone 'https://github.com/jashandeep-sohi/charts.git' charts
   $ cd charts/
