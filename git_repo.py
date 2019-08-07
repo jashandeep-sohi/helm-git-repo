@@ -60,19 +60,6 @@ def add(name, git_url, branch, index_path):
 
 
 @cli.command(
-    "clear-cache"
-)
-@click.argument("NAME")
-def clear_cache(name):
-    """
-    Clear Git cache for a chart repository.
-    """
-    git_store_path = pathlib.Path(getenv("HELM_PLUGIN_DIR")) / "git" / name
-
-    sh("rm -rf {!s}/*".format(git_store_path), show=True)
-
-
-@cli.command(
     "index"
 )
 @click.argument(
