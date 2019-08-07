@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
     "--log-level",
     help="Log level",
     type=click.Choice(["critical", "error", "warning", "info", "debug"]),
-    default="info",
+    default="critical",
     show_default=True,
 )
 def cli(log_level):
@@ -83,7 +83,7 @@ def index(chart_dirs, out, merge, skip_prompt):
     Generate an index file from chart directories.
     """
     if not chart_dirs:
-        exit(0)
+        click_exit(0)
 
     if not skip_prompt:
         _, git_log, _ = sh("git log -1")
@@ -151,7 +151,7 @@ def index(chart_dirs, out, merge, skip_prompt):
         with open(merge, "r") as index_fobj, out as out_fobj:
             out_fobj.writelines(index_fobj)
 
-        exit(0, "Sucessfully wrote index to '{!s}'".format(out.name))
+        click_exit(0, "Successfully wrote index to '{!s}'".format(out.name))
 
 
 @cli.command("fetch", hidden=True)
@@ -171,7 +171,7 @@ def fetch(cert_file, key_file, ca_file, url):
     elif url.startswith("git-repo+chart"):
         print_chart_tarball(url)
     else:
-        exit(1, "Unable to handle {!s}".format(url))
+        click_exit(1, "Unable to handle {!s}".format(url))
 
 
 def print_index(url):
@@ -190,7 +190,7 @@ def print_index(url):
     plugin_home = pathlib.Path(getenv("HELM_PLUGIN_DIR"))
 
     if not repo_name:
-        exit(1, "invalid url; must set 'name=' query paramater")
+        click_exit(1, "invalid url; must set 'name=' query paramater")
 
     git_dir = plugin_home / "git" / repo_name
 
@@ -285,18 +285,15 @@ def git(git_dir, cmd, *args, **kwargs):
     )
 
 
-def exit(ret, *args):
-    if args:
+def click_exit(ret, msg=None):
+    logger.debug("exiting with returncode %s; message %s", ret, msg)
+    if msg:
         if ret != 0:
-            logger.error(*args)
+            click.secho(msg, fg="red", err=True)
         else:
-            logger.info(*args, extra=dict(click={"fg": "green"}))
+            click.secho(msg, fg="green", err=True)
 
     raise SystemExit(ret)
-
-
-def click_log(level, msg, **kwargs):
-    logger.log(level, msg, extra={"click": kwargs})
 
 
 def sh(*args, show=False, hide_cmd=False, hide_out=False, hide_err=False,
@@ -309,27 +306,30 @@ def sh(*args, show=False, hide_cmd=False, hide_out=False, hide_err=False,
         **kwargs
     )
 
-    cmd_level = logging.INFO if show and not hide_cmd else logging.DEBUG
-    stdout_level = logging.INFO if show and not hide_out else logging.DEBUG
-    stderr_level = logging.WARN if show and not hide_err else logging.DEBUG
+    logger.debug("cmd: %s", proc.args)
 
-    click_log(cmd_level, proc.args, bold=True)
+    if show and not hide_cmd:
+        click.secho(proc.args, bold=True, err=True)
 
     out, err = proc.communicate()
     ret = proc.returncode
 
     if out:
         out = out.decode("utf-8").strip()
-        click_log(stdout_level, out)
+        logger.debug("stdout: %s", out)
+
+    if out and show and not hide_out:
+        click.secho(out, fg="green", err=True)
 
     if err:
         err = err.decode("utf-8").strip()
+        logger.debug("stderr: %s", err)
+
+    if err and show and not hide_err:
+        click.secho(err, fg="red", err=True)
 
     if exit_on_error and ret != 0:
-        logger.error(err)
         raise SystemExit(ret)
-    elif err:
-        click_log(stderr_level, err)
 
     return ret, out, err
 
