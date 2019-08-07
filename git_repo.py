@@ -253,7 +253,7 @@ def print_chart_tarball(url):
 
     git(
         git_dir,
-        "fetch origin '{!s}'".format(commit_ref),
+        "fetch origin {!s}:{!s}".format(commit_ref, commit_ref),
     )
 
     with tempfile.TemporaryDirectory() as tmp_dir:
