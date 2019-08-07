@@ -1,13 +1,12 @@
-import click
 import pathlib
 import tempfile
 import subprocess
-import sys
 import urllib.parse
-import hashlib
 import logging
 
 from os import getenv
+
+import click
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,6 @@ logger = logging.getLogger(__name__)
 )
 def cli(log_level):
     handler = ClickLoggingHandler()
-    handler.setFormatter(ClickLoggingFormatter())
     logger.addHandler(handler)
     logger.setLevel(log_level.upper())
 
@@ -279,7 +277,6 @@ def print_chart_tarball(url):
             stdout_fobj.writelines(chart_tgz_fobj)
 
 
-
 def git(git_dir, cmd, *args, **kwargs):
     return sh(
         "git --git-dir '{!s}' {!s}".format(git_dir, cmd),
@@ -347,22 +344,6 @@ class ClickLoggingHandler(logging.Handler):
             )
         except Exception:
             self.handleError(record)
-
-
-class ClickLoggingFormatter(logging.Formatter):
-
-    def format(self, record):
-        fmt_by_level = {
-            "error": dict(fg="red"),
-            "exception": dict(fg="red"),
-            "warning": dict(fg="yellow"),
-        }
-
-        fmt = fmt_by_level.get(record.levelname.lower(), {})
-
-        setattr(record, "click", {**getattr(record, "click", {}), **fmt})
-
-        return super().format(record)
 
 
 if __name__ == "__main__":
