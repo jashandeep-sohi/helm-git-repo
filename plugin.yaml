@@ -1,5 +1,5 @@
 name: "git-repo"
-version: "0.1.0"
+version: "0.2.0"
 usage: "Use Git as a chart repositiory"
 description: "Use Git as a chart repositiory"
 ignoreFlags: false
