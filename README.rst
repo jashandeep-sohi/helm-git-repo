@@ -6,8 +6,8 @@ Helm plugin to use Git as a chart repository
 
 Requirements
 ------------
-- Helm >= 2.14.3
-- Python >= 3.7
+- Helm >= 2.14.3 (might work with older 2.x versions)
+- Python >= 3.7 (might work with older 3.x version)
 - pip
 - Git
 
@@ -20,6 +20,7 @@ Install the latest development version::
 Usage
 -----
 ::
+
   $ helm git-repo --help
   Usage: helm git-repo [OPTIONS] COMMAND [ARGS]...
 
