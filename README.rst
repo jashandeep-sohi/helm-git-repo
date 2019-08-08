@@ -42,11 +42,12 @@ subcommand::
   $ helm git-repo add --help
   Usage: helm git-repo add [OPTIONS] NAME GIT_URL
 
-    Add a chart repository.
+    Add a Git chart repository.
 
   Options:
-    --branch TEXT      [default: master]
-    --index-path TEXT  [default: index.yaml]
+    --branch TEXT      Git branch to use  [default: master]
+    --index-path TEXT  Path to index file in Git repository  [default:
+                       index.yaml]
     --help             Show this message and exit.
 
 For example::
