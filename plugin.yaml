@@ -1,7 +1,7 @@
 name: "git-repo"
 version: "0.1.0"
 usage: "Use Git as a chart repositiory"
-description: "helm git-repo --help"
+description: "Use Git as a chart repositiory"
 ignoreFlags: false
 useTunnel: false
 command: "$HELM_PLUGIN_DIR/git-repo.sh"
