@@ -37,16 +37,18 @@ def cli(log_level):
 @click.option(
     "--branch",
     default="master",
+    help="Git branch to use",
     show_default=True,
 )
 @click.option(
     "--index-path",
+    help="Path to index file in Git repository",
     default="index.yaml",
     show_default=True,
 )
 def add(name, git_url, branch, index_path):
     """
-    Add a chart repository.
+    Add a Git chart repository.
     """
     url = "git-repo+index:{!s}?branch={!s}&index_path={!s}&name={!s}".format(
         git_url,
