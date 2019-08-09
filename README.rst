@@ -60,6 +60,12 @@ commands::
   $ helm fetch test/prometheus
   $ helm inspect test/prometheus
   $ helm install test/prometheus
+  $ helm search --versions test/
+  NAME            CHART VERSION   APP VERSION     DESCRIPTION
+  test/prometheus 8.15.0          2.11.1          Prometheus is a monitoring system and time series database.
+  test/prometheus 6.2.1           2.2.1           Prometheus is a monitoring system and time series database.
+  test/rethinkdb  1.0.0           0.1.0           The open-source database for the realtime web
+  test/rethinkdb  0.1.3           0.1.0           The open-source database for the realtime web
 
 
 Index
